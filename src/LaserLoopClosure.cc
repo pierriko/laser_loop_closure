@@ -57,8 +57,8 @@ using gtsam::NonlinearFactorGraph;
 using gtsam::Pose3;
 using gtsam::PriorFactor;
 using gtsam::Rot3;
+using gtsam::Point3;
 using gtsam::Values;
-using gtsam::Vector3;
 using gtsam::Vector6;
 
 LaserLoopClosure::LaserLoopClosure()
@@ -141,7 +141,7 @@ bool LaserLoopClosure::LoadParameters(const ros::NodeHandle& n) {
   isam_.reset(new ISAM2(parameters));
 
   // Set the initial position.
-  Vector3 translation(init_x, init_y, init_z);
+  Point3 translation(init_x, init_y, init_z);
   Rot3 rotation(Rot3::RzRyRx(init_roll, init_pitch, init_yaw));
   Pose3 pose(rotation, translation);
 
@@ -395,10 +395,7 @@ gu::Transform3 LaserLoopClosure::ToGu(const Pose3& pose) const {
 }
 
 Pose3 LaserLoopClosure::ToGtsam(const gu::Transform3& pose) const {
-  Vector3 t;
-  t(0) = pose.translation(0);
-  t(1) = pose.translation(1);
-  t(2) = pose.translation(2);
+  Point3 t(pose.translation(0), pose.translation(1), pose.translation(2));
 
   Rot3 r(pose.rotation(0, 0), pose.rotation(0, 1), pose.rotation(0, 2),
          pose.rotation(1, 0), pose.rotation(1, 1), pose.rotation(1, 2),
@@ -409,7 +406,9 @@ Pose3 LaserLoopClosure::ToGtsam(const gu::Transform3& pose) const {
 
 LaserLoopClosure::Mat66 LaserLoopClosure::ToGu(
     const LaserLoopClosure::Gaussian::shared_ptr& covariance) const {
-  gtsam::Matrix66 gtsam_covariance = covariance->covariance();
+  gtsam::Matrix R = covariance->R();
+  gtsam::Matrix information = R.transpose() * R;
+  gtsam::Matrix gtsam_covariance = information.inverse();
 
   LaserLoopClosure::Mat66 out;
   for (int i = 0; i < 6; ++i)
@@ -421,7 +420,7 @@ LaserLoopClosure::Mat66 LaserLoopClosure::ToGu(
 
 LaserLoopClosure::Gaussian::shared_ptr LaserLoopClosure::ToGtsam(
     const LaserLoopClosure::Mat66& covariance) const {
-  gtsam::Matrix66 gtsam_covariance;
+  gtsam::Matrix6 gtsam_covariance;
 
   for (int i = 0; i < 6; ++i)
     for (int j = 0; j < 6; ++j)
